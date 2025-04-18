@@ -1,0 +1,741 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chop Money - Earn Daily!</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body className="bg-yellow-100">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    const App = () => {
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+      const [view, setView] = useState('signin');
+      const [userType, setUserType] = useState('consumer');
+      const [phone, setPhone] = useState('');
+      const [name, setName] = useState('');
+      const [password, setPassword] = useState('');
+      const [referralInput, setReferralInput] = useState('');
+      const [otp, setOtp] = useState('');
+      const [ads, setAds] = useState([
+        { id: 1, title: 'Share Unilever Ad', reward: '2 GHS', task: 'Share on WhatsApp', type: 'ad', clicks: 0, dailyLimit: 50, ownerLevel: 'Basic' },
+        { id: 2, title: 'Survey Junkie Consumer Survey', reward: '3 GHS', task: 'Complete 5-min survey', type: 'survey', clicks: 0, dailyLimit: 50, ownerLevel: 'Basic' },
+        { id: 3, title: 'Play Miniclip Puzzle', reward: '2 GHS', task: 'Reach level 5', type: 'game', clicks: 0, dailyLimit: 50, ownerLevel: 'Basic' },
+        { id: 4, title: 'View Betway Football Ad', reward: '2 GHS', task: 'Watch 30s ad', type: 'betting', clicks: 0, dailyLimit: 50, ownerLevel: 'Basic' },
+      ]);
+      const [newAd, setNewAd] = useState({ title: '', reward: '', task: '', type: 'ad', level: 'Basic' });
+      const [earnings, setEarnings] = useState(0);
+      const [checkInStreak, setCheckInStreak] = useState(0);
+      const [dailyBonus, setDailyBonus] = useState(0);
+      const [clickedAds, setClickedAds] = useState([]);
+      const [referralCode] = useState('CHOP' + Math.floor(1000 + Math.random() * 9000));
+      const [referralEarnings, setReferralEarnings] = useState({ tier1: 0, tier2: 0, tier3: 0, tier4: 0, tier5: 0 });
+      const [referralCount, setReferralCount] = useState(0);
+      const [userLevel, setUserLevel] = useState('Free');
+      const [advertiserLevel, setAdvertiserLevel] = useState('Basic');
+      const [activityDays, setActivityDays] = useState(0);
+      const [susuPool, setSusuPool] = useState(null);
+      const [susuEarnings, setSusuEarnings] = useState(0);
+      const [networkBonus, setNetworkBonus] = useState(0);
+      const [platformFees, setPlatformFees] = useState(0);
+      const [currentSection, setCurrentSection] = useState('home');
+
+      const getNextPayoutTime = () => {
+        const now = new Date();
+        const hours = now.getUTCHours();
+        return hours < 6 ? '6:00 AM GMT' : hours < 18 ? '6:00 PM GMT' : '6:00 AM GMT (tomorrow)';
+      };
+
+      const getMinActivityDays = () => {
+        switch (userLevel) {
+          case 'Free': return 3;
+          case 'Bronze': return 1;
+          case 'Silver': return 0;
+          case 'Gold': return 0;
+          default: return 3;
+        }
+      };
+
+      const handleSignUp = () => {
+        if (!phone.match(/^\+233[0-9]{9}$|^\+234[0-9]{10}$/)) {
+          alert('Enter a valid phone number! E.g., +233241234567 (Ghana) or +2348123456789 (Nigeria)');
+          return;
+        }
+        if (!name || !password) {
+          alert('Enter your name and password!');
+          return;
+        }
+        setView('verify');
+      };
+
+      const handleVerify = () => {
+        if (otp !== '123456') {
+          alert('Incorrect OTP! Try 123456 for now.');
+          return;
+        }
+        if (referralInput && referralInput !== referralCode) {
+          alert(`Thanks for using referral code ${referralInput}! Your inviter will earn when you do!`);
+        }
+        localStorage.setItem('user', JSON.stringify({ phone, name, password, userType, referralCode, verified: true }));
+        setIsAuthenticated(true);
+        setView('main');
+        alert('Phone verified via MTN MoMo! Ready to chop money!');
+      };
+
+      const handleSignIn = () => {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user.phone === phone && user.password === password && user.verified) {
+          setIsAuthenticated(true);
+          setView('main');
+          setUserType(user.userType || 'consumer');
+          alert('Welcome back! Time to chop money!');
+        } else {
+          alert('Phone, password, or verification incorrect! Try again.');
+        }
+      };
+
+      const handleCheckIn = () => {
+        if (checkInStreak >= 1 && checkInStreak % 1 === 0) {
+          alert('You’ve checked in today! Come back tomorrow for more cash!');
+          return;
+        }
+        setCheckInStreak(checkInStreak + 1);
+        setActivityDays(activityDays + 1);
+        const reward = 0.5;
+        setEarnings(earnings + reward);
+        if (susuPool) {
+          setSusuEarnings(susuEarnings + reward);
+          setSusuPool({
+            ...susuPool,
+            members: susuPool.members.map(m => m.name === 'You' ? { ...m, contributions: m.contributions + reward } : m)
+          });
+        }
+        alert(`Chop Cash! You earned ${reward} GHS for checking in. Streak: ${checkInStreak + 1} days!`);
+      };
+
+      const handleAddAd = () => {
+        if (!newAd.title || !newAd.reward || !newAd.task || !newAd.type) {
+          alert('Fill all fields to post your ad, survey, game, or betting task!');
+          return;
+        }
+        const dailyLimit = advertiserLevel === 'Basic' ? 50 : advertiserLevel === 'Pro' ? 100 : 200;
+        alert(`Processing ${advertiserLevel} ${newAd.type} payment via MTN MoMo... Payment complete!`);
+        setAds([...ads, { id: ads.length + 1, title: newAd.title, reward: newAd.reward, task: newAd.task, type: newAd.type, clicks: 0, dailyLimit, ownerLevel: advertiserLevel }]);
+        setNewAd({ title: '', reward: '', task: '', type: 'ad', level: 'Basic' });
+      };
+
+      const handleCompleteTask = (ad) => {
+        if (clickedAds.includes(ad.id)) {
+          alert('You’ve already done this task! Try another one.');
+          return;
+        }
+        const maxTasks = userLevel === 'Free' ? 3 : userLevel === 'Bronze' ? 4 : userLevel === 'Silver' ? 5 : 6;
+        if (dailyBonus >= maxTasks) {
+          alert(`You’ve hit your ${userLevel} task limit (${maxTasks}/day). Upgrade for more!`);
+          return;
+        }
+        if (ad.clicks >= ad.dailyLimit) {
+          alert('This task has reached its daily click limit! Try another one.');
+          return;
+        }
+        if (ad.type === 'betting' && Math.random() > 0.8) {
+          alert('You must be 18+ to view betting ads. Age verification required.');
+          return;
+        }
+        const rewardValue = parseFloat(ad.reward) || 0;
+        setEarnings(earnings + rewardValue);
+        if (susuPool) {
+          setSusuEarnings(susuEarnings + rewardValue);
+          setSusuPool({
+            ...susuPool,
+            members: susuPool.members.map(m => m.name === 'You' ? { ...m, contributions: m.contributions + rewardValue } : m)
+          });
+        }
+        setClickedAds([...clickedAds, ad.id]);
+        setAds(ads.map(a => a.id === ad.id ? { ...a, clicks: a.clicks + 1 } : a));
+        setDailyBonus(dailyBonus + 1);
+        setActivityDays(activityDays + 1);
+        const platformFee = rewardValue * 0.01;
+        setPlatformFees(platformFees + platformFee);
+        if (dailyBonus + 1 >= 3) {
+          setEarnings(earnings + 1);
+          if (susuPool) setSusuEarnings(susuEarnings + 1);
+          alert('Nice! You earned 1 GHS Daily Bonus for 3 tasks!');
+          setDailyBonus(0);
+        } else {
+          alert(`Thanks! You earned ${ad.reward} via MTN MoMo. Complete ${3 - (dailyBonus + 1)} more for a 1 GHS bonus!`);
+        }
+      };
+
+      const handleWithdraw = () => {
+        const minActivityDays = getMinActivityDays();
+        if (referralCount < 2) {
+          alert(`Refer 2 people to unlock withdrawals! Share code: ${referralCode}`);
+          return;
+        }
+        if (activityDays < minActivityDays) {
+          alert(`Need ${minActivityDays} days of activity (check-ins or tasks) to withdraw. ${minActivityDays - activityDays} days left!`);
+          return;
+        }
+        if (earnings < 10) {
+          alert('Need at least 10 GHS to withdraw. Keep earning!');
+          return;
+        }
+        const payoutTime = getNextPayoutTime();
+        alert(`Withdrawing ${earnings} GHS to MTN MoMo... Queued for ${payoutTime}!`);
+        setEarnings(0);
+        setReferralEarnings({ tier1: 0, tier2: 0, tier3: 0, tier4: 0, tier5: 0 });
+        setSusuEarnings(0);
+      };
+
+      const handleRefer = () => {
+        const tiers = [2, 1, 0.5, 0.25, 0.1];
+        const newEarnings = { ...referralEarnings };
+        for (let i = 0; i < tiers.length; i++) {
+          if (Math.random() > 0.5) {
+            newEarnings[`tier${i + 1}`] += tiers[i];
+          }
+        }
+        setReferralEarnings(newEarnings);
+        const totalReferral = Object.values(newEarnings).reduce((a, b) => a + b, 0);
+        setEarnings(earnings + totalReferral);
+        if (susuPool) setSusuEarnings(susuEarnings + totalReferral);
+        setReferralCount(referralCount + 1);
+        alert(`Chop Cash! You earned ${totalReferral.toFixed(2)} GHS from referrals! Share code: ${referralCode}. Referrals: ${referralCount + 1}`);
+      };
+
+      const handleSubscribe = (level, cost) => {
+        alert(`Subscribing to ${level} for ${cost} GHS via MTN MoMo... Payment complete!`);
+        setUserLevel(level);
+      };
+
+      const handleAdvertiserSubscribe = (level, cost) => {
+        alert(`Subscribing to ${level} for ${cost} GHS via MTN MoMo... Payment complete!`);
+        setAdvertiserLevel(level);
+      };
+
+      const handleJoinSusu = () => {
+        if (userType !== 'consumer') {
+          alert('Only earners can join money pools! Switch to earning mode.');
+          return;
+        }
+        if (susuPool) {
+          alert('You’re already in a money pool! Stick with it!');
+          return;
+        }
+        const pool = {
+          id: 'SUSU' + Math.floor(1000 + Math.random() * 9000),
+          members: [
+            { name: 'You', week: 1, contributions: 0 },
+            { name: 'Ama', week: 2, contributions: 0 },
+            { name: 'Kofi', week: 3, contributions: 0 },
+            { name: 'Kwame', week: 4, contributions: 0 },
+            { name: 'Adjoa', week: 5, contributions: 0 },
+          ],
+          total: susuEarnings,
+          currentWeek: 1,
+        };
+        setSusuPool(pool);
+        const bonus = 5;
+        setNetworkBonus(networkBonus + bonus);
+        setEarnings(earnings + bonus);
+        alert(`Nice! You joined money pool ${pool.id}! Payout schedule set. Earned ${bonus} GHS bonus for leading 5 members!`);
+      };
+
+      const handleClaimSusu = () => {
+        if (!susuPool || susuPool.currentWeek !== 1) {
+          alert(`Not your turn yet! Your payout is Week ${susuPool.members.find(m => m.name === 'You').week}.`);
+          return;
+        }
+        const minActivityDays = getMinActivityDays();
+        if (referralCount < 2) {
+          alert(`Refer 2 people to unlock pool payout! Share code: ${referralCode}`);
+          return;
+        }
+        if (activityDays < minActivityDays) {
+          alert(`Need ${minActivityDays} days of activity to withdraw pool payout. ${minActivityDays - activityDays} days left!`);
+          return;
+        }
+        if (susuEarnings < 10) {
+          alert('Money pool needs 10 GHS to claim! Keep earning with your group!');
+          return;
+        }
+        const platformFee = susuEarnings * 0.02;
+        const payoutTime = getNextPayoutTime();
+        setPlatformFees(platformFees + platformFee);
+        alert(`Claiming ${susuEarnings - platformFee} GHS from money pool ${susuPool.id} to MTN MoMo... Queued for ${payoutTime}! Platform fee: ${platformFee.toFixed(2)} GHS. Group notified!`);
+        setSusuEarnings(0);
+        setSusuPool({ ...susuPool, currentWeek: susuPool.currentWeek + 1 });
+      };
+
+      if (!isAuthenticated) {
+        return (
+          <div className="container mx-auto p-4 bg-yellow-100 min-h-screen">
+            <h1 className="text-3xl font-bold mb-4 text-red-600">Chop Money - Earn Daily!</h1>
+            <div className="mb-4 flex space-x-2">
+              <button
+                className={`p-2 rounded ${view === 'signin' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
+                onClick={() => setView('signin')}
+              >
+                Sign In
+              </button>
+              <button
+                className={`p-2 rounded ${view === 'signup' ? 'bg-green-600 text-white' : 'bg-gray-200'}`}
+                onClick={() => setView('signup')}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            {view === 'signup' && (
+              <div className="p-4 bg-white rounded">
+                <h2 className="text-2xl font-semibold mb-2">Sign Up</h2>
+                <input
+                  type="text"
+                  placeholder="Name (e.g., Kofi Mensah)"
+                  className="w-full p-2 border rounded mb-2"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Phone (+233241234567 or +2348123456789)"
+                  className="w-full p-2 border rounded mb-2"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  className="w-full p-2 border rounded mb-2"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Referral Code (e.g., CHOP1234)"
+                  className="w-full p-2 border rounded mb-2"
+                  value={referralInput}
+                  onChange={(e) => setReferralInput(e.target.value)}
+                />
+                <select
+                  className="w-full p-2 border rounded mb-2"
+                  value={userType}
+                  onChange={(e) => setUserType(e.target.value)}
+                >
+                  <option value="consumer">I Want to Earn</option>
+                  <option value="advertiser">I Want to Advertise</option>
+                </select>
+                <button
+                  className="bg-red-600 text-white p-2 rounded"
+                  onClick={handleSignUp}
+                >
+                  Sign Up
+                </button>
+              </div>
+            )}
+
+            {view === 'verify' && (
+              <div className="p-4 bg-white rounded">
+                <h2 className="text-2xl font-semibold mb-2">Verify Phone</h2>
+                <p>Enter the OTP sent to your phone via MTN MoMo (use 123456 for now)</p>
+                <input
+                  type="text"
+                  placeholder="OTP (e.g., 123456)"
+                  className="w-full p-2 border rounded mb-2"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                />
+                <button
+                  className="bg-red-600 text-white p-2 rounded"
+                  onClick={handleVerify}
+                >
+                  Verify
+                </button>
+              </div>
+            )}
+
+            {view === 'signin' && (
+              <div className="p-4 bg-white rounded">
+                <h2 className="text-2xl font-semibold mb-2">Sign In</h2>
+                <input
+                  type="text"
+                  placeholder="Phone (+233241234567 or +2348123456789)"
+                  className="w-full p-2 border rounded mb-2"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  className="w-full p-2 border rounded mb-2"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  className="bg-red-600 text-white p-2 rounded"
+                  onClick={handleSignIn}
+                >
+                  Sign In
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex min-h-screen bg-yellow-100">
+          <div className="w-64 bg-black text-yellow-400 p-4 fixed h-full">
+            <h2 className="text-xl font-bold mb-4">Chop Money</h2>
+            <nav>
+              <button
+                className={`w-full text-left p-2 mb-2 ${currentSection === 'home' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                onClick={() => setCurrentSection('home')}
+              >
+                Home
+              </button>
+              <button
+                className={`w-full text-left p-2 mb-2 ${currentSection === 'profile' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                onClick={() => setCurrentSection('profile')}
+              >
+                Profile
+              </button>
+              {userType === 'consumer' && (
+                <button
+                  className={`w-full text-left p-2 mb-2 ${currentSection === 'susu' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                  onClick={() => setCurrentSection('susu')}
+                >
+                  Money Pool
+                </button>
+              )}
+              <button
+                className={`w-full text-left p-2 mb-2 ${currentSection === 'referrals' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                onClick={() => setCurrentSection('referrals')}
+              >
+                Referrals
+              </button>
+              {userType === 'consumer' ? (
+                <>
+                  <button
+                    className={`w-full text-left p-2 mb-2 ${currentSection === 'tasks' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                    onClick={() => setCurrentSection('tasks')}
+                  >
+                    Tasks
+                  </button>
+                  <button
+                    className={`w-full text-left p-2 mb-2 ${currentSection === 'withdraw' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                    onClick={() => setCurrentSection('withdraw')}
+                  >
+                    Withdraw
+                  </button>
+                  <button
+                    className={`w-full text-left p-2 mb-2 ${currentSection === 'vip' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                    onClick={() => setCurrentSection('vip')}
+                  >
+                    VIP Plans
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className={`w-full text-left p-2 mb-2 ${currentSection === 'ads' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                    onClick={() => setCurrentSection('ads')}
+                  >
+                    Ads
+                  </button>
+                  <button
+                    className={`w-full text-left p-2 mb-2 ${currentSection === 'plans' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                    onClick={() => setCurrentSection('plans')}
+                  >
+                    Plans
+                  </button>
+                </>
+              )}
+              {userType === 'consumer' && (
+                <button
+                  className={`w-full text-left p-2 mb-2 ${currentSection === 'admin' ? 'bg-green-600 text-white' : 'hover:bg-gray-700'}`}
+                  onClick={() => setCurrentSection('admin')}
+                >
+                  Admin View
+                </button>
+              )}
+              <button
+                className="w-full text-left p-2 mt-4 bg-red-600 text-white"
+                onClick={() => { setIsAuthenticated(false); setView('signin'); setPhone(''); setPassword(''); }}
+              >
+                Sign Out
+              </button>
+            </nav>
+          </div>
+          <div className="ml-64 container mx-auto p-4">
+            <h1 className="text-3xl font-bold mb-4 text-red-600">Chop Money - Earn Daily!</h1>
+
+            {currentSection === 'home' && (
+              <div>
+                <p className="text-lg">Welcome, {name}! Time to earn!</p>
+                <p>Your Balance: <span className="font-bold">{earnings.toFixed(2)} GHS</span></p>
+                <p>Activity Days: {activityDays}/{getMinActivityDays()} for withdrawal</p>
+                <p>Referrals: {referralCount}/2 to unlock withdrawals</p>
+                <button
+                  className="mt-2 bg-black text-yellow-400 p-2 rounded"
+                  onClick={handleCheckIn}
+                >
+                  Daily Check-In (0.50 GHS)
+                </button>
+              </div>
+            )}
+
+            {currentSection === 'profile' && (
+              <div className="p-4 bg-green-100 rounded">
+                <h2 className="text-2xl font-semibold mb-2">Profile</h2>
+                <p>Name: {name}</p>
+                <p>Phone: {phone}</p>
+                <p>User Type: {userType === 'consumer' ? 'Earn Cash' : 'Advertiser'}</p>
+                <p>Level: {userType === 'consumer' ? userLevel : advertiserLevel}</p>
+                <p>Referral Code: <span className="font-bold">{referralCode}</span></p>
+                <p>Referrals: {referralCount}/2</p>
+              </div>
+            )}
+
+            {currentSection === 'susu' && userType === 'consumer' && (
+              <div className="p-4 bg-green-100 rounded">
+                <h2 className="text-2xl font-semibold mb-2">Money Pool</h2>
+                {susuPool ? (
+                  <div>
+                    <p>Pool ID: {susuPool.id}</p>
+                    <p>Total Pool: {susuEarnings.toFixed(2)} GHS</p>
+                    <p>Contributions:</p>
+                    <ul>
+                      {susuPool.members.map(member => (
+                        <li key={member.name}>{member.name}: {member.contributions.toFixed(2)} GHS</li>
+                      ))}
+                    </ul>
+                    <p>Payout Schedule:</p>
+                    <ul>
+                      {susuPool.members.map(member => (
+                        <li key={member.name}>{member.name}: Week {member.week} {susuPool.currentWeek === member.week ? '(Your Turn!)' : ''}</li>
+                      ))}
+                    </ul>
+                    <button
+                      className="mt-2 bg-green-600 text-white p-2 rounded"
+                      onClick={handleClaimSusu}
+                    >
+                      Claim Pool Payout
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="mt-2 bg-green-600 text-white p-2 rounded"
+                    onClick={handleJoinSusu}
+                  >
+                    Join Money Pool
+                  </button>
+                )}
+                <p className="mt-2">Network Bonus: {networkBonus.toFixed(2)} GHS</p>
+              </div>
+            )}
+
+            {currentSection === 'referrals' && (
+              <div className="p-4 bg-green-100 rounded">
+                <h2 className="text-2xl font-semibold mb-2">Referrals</h2>
+                <p>Referral Earnings: {Object.entries(referralEarnings).map(([tier, amount]) => `${tier.toUpperCase()}: ${amount.toFixed(2)} GHS`).join(', ')}</p>
+                <p>Your Referral Code: <span className="font-bold">{referralCode}</span></p>
+                <p>Referrals: {referralCount}/2 to unlock withdrawals</p>
+                <button
+                  className="mt-2 bg-red-600 text-white p-2 rounded"
+                  onClick={handleRefer}
+                >
+                  Refer & Earn
+                </button>
+              </div>
+            )}
+
+            {currentSection === 'tasks' && userType === 'consumer' && (
+              <div>
+                <h2 className="text-2xl font-semibold mb-2 text-black">Today’s Tasks</h2>
+                <p>Tasks Today: {dailyBonus}/{userLevel === 'Free' ? 3 : userLevel === 'Bronze' ? 4 : userLevel === 'Silver' ? 5 : 6}</p>
+                <ul className="space-y-4">
+                  {ads.slice(0, userLevel === 'Free' ? 3 : userLevel === 'Bronze' ? 4 : userLevel === 'Silver' ? 5 : 6).map((ad) => (
+                    <li key={ad.id} className="p-4 border rounded bg-white">
+                      <h3 className="text-xl font-bold">{ad.title}</h3>
+                      <p>Reward: <span className="text-green-600">{ad.reward}</span></p>
+                      <p>Task: {ad.task}</p>
+                      <p>Type: {ad.type.charAt(0).toUpperCase() + ad.type.slice(1)}</p>
+                      <p>Ad Level: {ad.ownerLevel} ({ad.clicks}/{ad.dailyLimit} clicks today)</p>
+                      {ad.type === 'betting' && <p className="text-sm text-red-600">18+ only. Bet responsibly.</p>}
+                      <button
+                        className="mt-2 bg-green-600 text-white p-2 rounded"
+                        onClick={() => handleCompleteTask(ad)}
+                        disabled={clickedAds.includes(ad.id) || ad.clicks >= ad.dailyLimit}
+                      >
+                        {clickedAds.includes(ad.id) ? 'Done!' : ad.clicks >= ad.dailyLimit ? 'Limit Reached' : 'Earn This Cash!'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {currentSection === 'withdraw' && userType === 'consumer' && (
+              <div className="p-4 bg-green-100 rounded">
+                <h2 className="text-2xl font-semibold mb-2">Withdraw</h2>
+                <p>Your Balance: <span className="font-bold">{earnings.toFixed(2)} GHS</span></p>
+                <p>Activity Days: {activityDays}/{getMinActivityDays()}</p>
+                <p>Referrals: {referralCount}/2</p>
+                <p>Note: Withdrawals processed daily at 6:00 AM & 6:00 PM GMT</p>
+                <button
+                  className="mt-2 bg-red-600 text-white p-2 rounded"
+                  onClick={handleWithdraw}
+                >
+                  Withdraw to MTN MoMo
+                </button>
+              </div>
+            )}
+
+            {currentSection === 'vip' && userType === 'consumer' && (
+              <div className="p-4 bg-black text-yellow-400 rounded">
+                <h2 className="text-2xl font-semibold mb-2">Go VIP!</h2>
+                <p>Free: 3 tasks/day (ads, surveys, games), withdraw after 2-3 days</p>
+                <p>Bronze (5 GHS/mo): 4 tasks/day, withdraw after 1 day</p>
+                <p>Silver (10 GHS/mo): 5 tasks/day, withdraw same day</p>
+                <p>Gold (20 GHS/mo): 6 tasks/day, withdraw same day</p>
+                <div className="flex space-x-2 mt-2">
+                  <button className="bg-green-600 text-white p-1 rounded" onClick={() => handleSubscribe('Bronze', 5)}>Bronze</button>
+                  <button className="bg-green-600 text-white p-1 rounded" onClick={() => handleSubscribe('Silver', 10)}>Silver</button>
+                  <button className="bg-green-600 text-white p-1 rounded" onClick={() => handleSubscribe('Gold', 20)}>Gold</button>
+                </div>
+              </div>
+            )}
+
+            {currentSection === 'ads' && userType === 'advertiser' && (
+              <div>
+                <h2 className="text-2xl font-semibold mb-2 text-black">Post Your Task</h2>
+                <div className="space-y-2 bg-white p-4 rounded">
+                  <input
+                    type="text"
+                    placeholder="Task Title (e.g., Promote Unilever)"
+                    className="w-full p-2 border rounded"
+                    value={newAd.title}
+                    onChange={(e) => setNewAd({ ...newAd, title: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Reward (e.g., 2 GHS)"
+                    className="w-full p-2 border rounded"
+                    value={newAd.reward}
+                    onChange={(e) => setNewAd({ ...newAd, reward: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Task (e.g., Share on WhatsApp)"
+                    className="w-full p-2 border rounded"
+                    value={newAd.task}
+                    onChange={(e) => setNewAd({ ...newAd, task: e.target.value })}
+                  />
+                  <select
+                    className="w-full p-2 border rounded"
+                    value={newAd.type}
+                    onChange={(e) => setNewAd({ ...newAd, type: e.target.value })}
+                  >
+                    <option value="ad">Advertisement</option>
+                    <option value="survey">Survey</option>
+                    <option value="game">Game</option>
+                    <option value="betting">Betting Ad</option>
+                  </select>
+                  <button
+                    className="bg-red-600 text-white p-2 rounded"
+                    onClick={handleAddAd}
+                  >
+                    Post Task (Pay via MTN MoMo)
+                  </button>
+                </div>
+                <h3 className="text-xl font-semibold mt-4">Your Tasks</h3>
+                <ul className="space-y-2">
+                  {ads.map((ad) => (
+                    <li key={ad.id} className="p-2 bg-gray-100 rounded">
+                      {ad.title} - {ad.type.charAt(0).toUpperCase() + ad.type.slice(1)} - {ad.clicks}/{ad.dailyLimit} clicks today ({ad.ownerLevel})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {currentSection === 'plans' && userType === 'advertiser' && (
+              <div className="p-4 bg-black text-yellow-400 rounded">
+                <h2 className="text-2xl font-semibold mb-2">Advertiser Plans</h2>
+                <p>Basic (500 GHS/mo): 50 clicks/day for ads, surveys, games, or betting</p>
+                <p>Pro (1000 GHS/mo): 100 clicks/day, priority</p>
+                <p>Elite (2000 GHS/mo): 200 clicks/day, analytics</p>
+                <div className="flex space-x-2 mt-2">
+                  <button className="bg-green-600 text-white p-1 rounded" onClick={() => handleAdvertiserSubscribe('Basic', 500)}>Basic</button>
+                  <button className="bg-green-600 text-white p-1 rounded" onClick={() => handleAdvertiserSubscribe('Pro', 1000)}>Pro</button>
+                  <button className="bg-green-600 text-white p-1 rounded" onClick={() => handleAdvertiserSubscribe('Elite', 2000)}>Elite</button>
+                </div>
+              </div>
+            )}
+
+            {currentSection === 'admin' && userType === 'consumer' && (
+              <div className="p-4 bg-black text-yellow-400 rounded">
+                <h2 className="text-2xl font-semibold mb-2">Admin View</h2>
+                <p>Platform Fees (Tasks): {platformFees.toFixed(2)} GHS</p>
+                <p>Network Bonuses (Pools): {networkBonus.toFixed(2)} GHS</p>
+                <p>Advertiser Revenue: {(ads.length * 500).toFixed(2)} GHS (Basic Plan)</p>
+                <p>Total Earnings: {(platformFees + networkBonus + (ads.length * 500)).toFixed(2)} GHS</p>
+                <p>Note: Withdrawals require 2 referrals, Free: 2-3 days, Bronze: 1 day, Silver/Gold: same day. Processed at 6:00 AM/PM GMT.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
